@@ -4,14 +4,14 @@ A simple RPC (remote procedure call) protocol for IPC (inter-process communicati
 
 ## Rationale
 
-Scaling and communication between applications on different stacks require communication accross process boundaries. The mlost effective way to do this is via a socket (like a TCP socket, UNIX socket or Windows pipe).
+Scaling and communication between applications on different stacks require communication accross process boundaries. The most effective way to do this is via a socket (like a TCP socket, UNIX socket or Windows pipe).
 
-However, most use case demand some form of message framing but also the ability to match requests and response.
+However, most use cases demand not only some form of message framing but also the ability to match requests and response.
 
-This is an unpionionated protocol that provides:
+This is a simple RPC protocol that provides:
 
   1. A simple framing format using traditional control-characters
-  2. Message length prefixes to protect from massive overruns if a terminator is missed.
+  2. Message length prefixes to protect from massive overruns if a frame boundary is missed.
   3. UUIDv4 based message identifiers to match requests and responses
   4. Support for both async and synchronous message patterns
   5. ACK and NAK for messages to deal with all possible failure scenarios.
@@ -57,16 +57,16 @@ The following message types are defined:
 | Ack                        | `<SOH> UUID <ACK>`                   |
 | Nak                        | `<SOH> UUID <NAK>`                   |
 
-**`<SOH>`** : Start of Header byte (`0x01`)
-**`UUID`**: Unique UUID for the message/message pair (128 bits)
-**`<STX>`**: Start of Text byte (`0x02`)
-**`LEN`**: Length of message
-**`MESSAGE`**: The protocol data (variable length)
-**`<ETX>`**: End of Text byte (`0x03`)
-**`<EOT>`**: End of Transmission byte (`0x04`)
-**`<ACK>`**: ACK byte (`0x06`)
-**`<NAK>`**: NAK byte (`0x15`)
-**`0x00`**: Zero byte (`0x00`)
+**`<SOH>`** : Start of Header byte (`0x01`)  
+**`UUID`**: Unique UUID for the message/message pair (128 bits)  
+**`<STX>`**: Start of Text byte (`0x02`)  
+**`LEN`**: Length of message  
+**`MESSAGE`**: The protocol data (variable length)  
+**`<ETX>`**: End of Text byte (`0x03`)  
+**`<EOT>`**: End of Transmission byte (`0x04`)  
+**`<ACK>`**: ACK byte (`0x06`)  
+**`<NAK>`**: NAK byte (`0x15`)  
+**`0x00`**: Zero byte (`0x00`)  
 
 **Length**
 
@@ -156,6 +156,72 @@ The two parties establish an IPC channel on which they can begin communication. 
     Sender: <SOH>ffa0f5b3-c3dc-4dd2-aec5-c3d54e741c6c<STX>0x0CHello World<ETX>
     Receiver: <SOH>ffa0f5b3-c3dc-4dd2-aec5-c3d54e741c6c<NAK>
 
+## Using the module
+
+This module implements the protocol by providing an IpcServer and IpcSocket implementation. This wraps or instantiates an implementation of `net.Socket`
+
+### Install
+
+```shell
+npm install ipc-rpc
+```
+
+### Server
+
+```javascript
+    import { IpcSocket, IpcSocketServer, MessageHandler } from 'ipc-rpc'
+    
+    const messageHandler: MessageHandler = (client: IpcSocket, data: Buffer, response: (reply?: Buffer | Promise<Buffer>) => Promise<void>) => { 
+
+        response(new Promise<Buffer>((resolve) =>{
+            resolve(reply)
+        })).catch((e)=>{
+            console.error("Error sending reply", e)
+        })
+
+    }
+    const server = new IpcSocketServer({
+        messageHandler,
+        errorHandler: console.error,
+        ackTimeoutMs: 1000,
+        maxRetries: 5,
+        replyTimeoutMs: 5000
+    })
+    
+    await server.listen('./ipc.sock')
+```
+
+### Client
+
+```javascript
+    const client = new IpcSocket({
+        id : "MyClient",
+        socketOrPath: './ipc.sock',
+        messageHandler: (data) => {
+            console.log(`Got reply of ${data.length} bytes`)
+        },
+        errorHandler: (error) => {
+            console.error(error)
+        }
+    }, new DefaultConfig())
+
+    const data = Buffer.from('Hello World')
+    client.sendRequest(data), () => {
+            //Handle request ACK
+        }
+    }).then((reponse) => {
+        //Handle response
+    }).catch((e) => {
+        //Handle error
+    })
+ 
+    client.sendMessage(data).then(() => {
+        //Handle ACK
+    }).catch( (e) => {
+        //Handle error
+    })
+
+```
 
 # TODO
 
