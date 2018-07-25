@@ -1,1 +1,9 @@
-export {};
+export { IProtocolConfig as IpcConfig } from './protocol';
+export { DefaultConfig as DefaultIpcConfig } from './protocol';
+export { UUID } from './protocol';
+export { IpcSocket } from './socket';
+export { ErrorHandler as IpcErrorHandler } from './socket';
+export { ISocketConfig as IpcSocketConfig } from './socket';
+export { MessageHandler as IpcMessageHandler } from './socket';
+export { IpcSocketServer } from './server';
+export { IServerConfig as IpcServerConfig } from './server';
