@@ -1,6 +1,6 @@
-# ipc-rpc
+# ipc-msg
 
-A simple RPC (remote procedure call) protocol for IPC (inter-process communication)
+A simple framing protocol for messaging (and RPC) over raw sockets
 
 ## Rationale
 
@@ -8,13 +8,12 @@ Scaling and communication between applications on different stacks require commu
 
 However, most use cases demand not only some form of message framing but also the ability to match requests and response.
 
-This is a simple RPC protocol that provides:
+This is a simple framing protocol that also provides:
 
-  1. A simple framing format using traditional control-characters
-  2. Message length prefixes to protect from massive overruns if a frame boundary is missed.
-  3. UUIDv4 based message identifiers to match requests and responses
-  4. Support for both async and synchronous message patterns
-  5. ACK and NAK for messages to deal with all possible failure scenarios.
+  1. Message length prefixes to protect from massive overruns if a frame boundary is missed.
+  2. UUIDv4 based message identifiers to match requests and responses
+  3. Support for both async and synchronous message patterns
+  4. ACK and NAK for messages to deal with all possible failure scenarios.
 
 ## Protocol
 
@@ -163,13 +162,13 @@ This module implements the protocol by providing an IpcServer and IpcSocket impl
 ### Install
 
 ```shell
-npm install ipc-rpc
+npm install ipc-msg
 ```
 
 ### Server
 
 ```javascript
-    import { IpcSocket, IpcSocketServer, MessageHandler } from 'ipc-rpc'
+    import { IpcSocket, IpcSocketServer, MessageHandler } from 'ipc-msg'
     
     const messageHandler: MessageHandler = (client: IpcSocket, data: Buffer, response: (reply?: Buffer | Promise<Buffer>) => Promise<void>) => { 
 
