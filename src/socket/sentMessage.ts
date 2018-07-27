@@ -1,4 +1,4 @@
-import { IProtocolConfig as ProtocolConfig, UUID } from '../protocol'
+import { ProtocolConfig, UUID } from '../protocol'
 import { MessageState, MessageType } from './ipcSocket'
 
 export default class SentMessage {

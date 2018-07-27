@@ -52,6 +52,9 @@ const mockHandler: IpcMessageHandler = (
             },
             id: 'TEST-SERVER',
             messageHandler: mockHandler,
+            connectHandler: () => {
+                /* NOOP */
+            },
         },
         new DefaultIpcConfig(),
     )

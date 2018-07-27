@@ -5,7 +5,7 @@ export const EOT = 0x04
 export const ACK = 0x06
 export const NAK = 0x15
 
-export interface IProtocolConfig {
+export interface ProtocolConfig {
     ackTimeoutMs: number
     replyTimeoutMs: number
     throwOnUnsolictedResponse: boolean
@@ -13,7 +13,7 @@ export interface IProtocolConfig {
     maxRetries: number
 }
 
-export class DefaultConfig implements IProtocolConfig {
+export class DefaultConfig implements ProtocolConfig {
     public ackTimeoutMs = 1000
     public replyTimeoutMs = 5000
     public throwOnUnsolictedResponse = true

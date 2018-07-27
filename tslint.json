@@ -4,6 +4,7 @@
     "no-bitwise": false,
     "object-literal-sort-keys" : false,
     "semicolon": [true, "never"],
-    "variable-name": [ true, "ban-keywords", "check-format", "allow-leading-underscore" ]  
+    "variable-name": [ true, "ban-keywords", "check-format", "allow-leading-underscore" ],
+    "interface-name": false
   }
 }

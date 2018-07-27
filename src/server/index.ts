@@ -1,10 +1,13 @@
 import { Server, Socket } from 'net'
-import { create as createLogger, Logger } from './log'
-import { IProtocolConfig, UUID } from './protocol'
-import { ErrorHandler, IpcSocket, MessageHandler } from './socket'
+import { create as createLogger, Logger } from '../log'
+import { ProtocolConfig, UUID } from '../protocol'
+import { ErrorHandler, IpcSocket, MessageHandler } from '../socket'
 
-export interface IServerConfig {
+export type ConnectHandler = (socket: IpcSocket) => void
+
+export interface ServerConfig {
     id: string
+    connectHandler: ConnectHandler
     messageHandler: MessageHandler
     errorHandler: ErrorHandler
     allowHalfOpen?: boolean
@@ -13,19 +16,21 @@ export interface IServerConfig {
 
 export class IpcSocketServer {
     private _id: string
-    private _protocolConfig: IProtocolConfig
+    private _protocolConfig: ProtocolConfig
     private _clients = new Map<string, IpcSocket>()
     private _server: Server
+    private _connectHandler: ConnectHandler
     private _messageHandler: MessageHandler
     private _errorHandler: ErrorHandler
     private _log: Logger
 
-    constructor(config: IServerConfig, protocolConfig: IProtocolConfig) {
+    constructor(config: ServerConfig, protocolConfig: ProtocolConfig) {
         this._server = new Server({
             allowHalfOpen: config.allowHalfOpen,
             pauseOnConnect: config.pauseOnConnect,
         })
         this._id = config.id
+        this._connectHandler = config.connectHandler
         this._messageHandler = config.messageHandler
         this._errorHandler = config.errorHandler
         this._protocolConfig = protocolConfig
@@ -42,9 +47,20 @@ export class IpcSocketServer {
     public async listen(path: string, timeoutMs?: number): Promise<void> {
         this._log.debug(`Starting server...`)
         return new Promise<void>((resolve, reject) => {
-            const timeout = setTimeout(reject, timeoutMs || 30000)
+            const timeout = setTimeout(reject, timeoutMs || 5000)
             this._server.listen(path, () => {
                 this._log.info(`Server listening at ${path}`)
+                clearTimeout(timeout)
+                resolve()
+            })
+        })
+    }
+
+    public async close(timeoutMs?: number) {
+        this._log.debug(`Stopping server...`)
+        return new Promise<void>((resolve, reject) => {
+            const timeout = setTimeout(reject, timeoutMs || 5000)
+            this._server.close(() => {
                 clearTimeout(timeout)
                 resolve()
             })
@@ -68,7 +84,10 @@ export class IpcSocketServer {
 
         client.messageHandler = this._Client_onMessage.bind(this)
         client.errorHandler = this._Client_onError.bind(this)
+
+        this._connectHandler(client)
     }
+
     private _onError(error: Error) {
         this._log.error(`Error on server:`, error)
         return this._errorHandler(this, error)

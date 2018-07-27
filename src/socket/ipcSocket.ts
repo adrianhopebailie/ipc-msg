@@ -1,6 +1,6 @@
 import { Socket } from 'net'
 import { create as createLogger, Logger } from '../log'
-import { IProtocolConfig as ProtocolConfig, MessageReader, MessageWriter, UUID } from '../protocol'
+import { MessageReader, MessageWriter, ProtocolConfig, UUID } from '../protocol'
 import { IpcSocketServer } from '../server'
 import ReceivedMessage from './receivedMessage'
 import SentMessage from './sentMessage'
@@ -151,6 +151,10 @@ export default class IpcSocket {
                 request.sent()
             })
         })
+    }
+
+    public destroy(err: Error) {
+        this._socket.destroy(err)
     }
 
     private _createAndSendReply(id: UUID, data: Buffer, ack: AckCallback, nak: NakCallback, message: ReceivedMessage) {
