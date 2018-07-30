@@ -26,6 +26,18 @@ const mockHandler: IpcMessageHandler = (
         })
         return
     }
+    if (message === 'REQUEST_ASYNC_DELAY') {
+        response(
+            new Promise<Buffer>(resolve => {
+                setTimeout(() => {
+                    resolve(reply)
+                }, 5000)
+            }),
+        ).catch(e => {
+            console.error('Error sending message', e)
+        })
+        return
+    }
     if (message === 'REQUEST_SYNC') {
         response(reply).catch(e => {
             console.error('Error sending message', e)
@@ -59,11 +71,10 @@ const mockHandler: IpcMessageHandler = (
         new DefaultIpcConfig(),
     )
 
-    await server.listen('./ipc.sock')
+    await server.listen({ path: './ipc.sock' })
     const client = new IpcSocket(
         {
             id: 'test-client',
-            socketOrPath: './ipc.sock',
             messageHandler: (socket, data) => {
                 console.log(`Got reply of ${data.length} bytes from socket ${socket.id}`)
             },
@@ -74,13 +85,25 @@ const mockHandler: IpcMessageHandler = (
         new DefaultIpcConfig(),
     )
 
+    
+    await client.connect({ path: './ipc.sock'})
+
     const messages: { [key: string]: string[] } = {
         message_ack: ['MESSAGE', 'ACK'],
         request_ack_reply: ['REQUEST_ASYNC', 'ACK', 'REPLY'],
+        request_ack_delayreply: ['REQUEST_ASYNC_DELAY', 'ACK', 'REPLY'],
         request_reply: ['REQUEST_SYNC', 'REPLY'],
         request_ack_nak: ['REQUEST_ASYNC_ERROR', 'ACK', 'NAK'],
         request_nak: ['REQUEST_SYNC_ERROR', 'NAK'],
     }
+
+    process.on('SIGINT', () => {
+        client.close().then(() => {
+            server.close().then(() => {
+                process.exit(0)
+            })    
+        })
+    })
 
     for (let i = 0; i < 1000; i++) {
         const messageId = Object.keys(messages)[randomBytes(1)[0] % 5]

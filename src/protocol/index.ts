@@ -14,8 +14,8 @@ export interface ProtocolConfig {
 }
 
 export class DefaultConfig implements ProtocolConfig {
-    public ackTimeoutMs = 1000
-    public replyTimeoutMs = 5000
+    public ackTimeoutMs = 5000
+    public replyTimeoutMs = 15000
     public throwOnUnsolictedResponse = true
     public retryWithQuery = false
     public maxRetries = Infinity

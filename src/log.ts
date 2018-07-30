@@ -42,7 +42,7 @@ export const createRaw = (namespace: string): Logger => {
         stream: logStream,
     })
 }
-export const create = (namespace: string) => createRaw('ipc-rpc:' + namespace)
+export const create = (namespace: string) => createRaw('ipc-msg:' + namespace)
 
 export const setOutputStream = (newOutputStream: NodeJS.WriteStream) => {
     logStream.unpipe(outputStream)

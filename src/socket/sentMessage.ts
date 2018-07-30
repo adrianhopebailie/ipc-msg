@@ -1,7 +1,8 @@
+import { CachedMessage } from '.'
 import { ProtocolConfig, UUID } from '../protocol'
 import { MessageState, MessageType } from './ipcSocket'
 
-export default class SentMessage {
+export default class SentMessage implements CachedMessage {
     private _id: UUID
     private _data: Buffer
     private _reply?: Buffer
@@ -14,7 +15,7 @@ export default class SentMessage {
     private _ackCallback: () => void
     private _nakCallback: () => void
     private _retryCallback: () => void
-    private _lastModified = new Date()
+    private _lastModified = Date.now()
 
     constructor(
         id: UUID,
@@ -70,13 +71,14 @@ export default class SentMessage {
         }
     }
 
-    public get lastModified(): Date {
+    public get lastModified(): number {
         return this._lastModified
     }
 
     public sent(): void {
         this._state = MessageState.SENT
         this._startTimer()
+        this._lastModified = Date.now()
     }
 
     public ack(): void {
@@ -85,6 +87,7 @@ export default class SentMessage {
             case MessageState.SENT:
                 this._state = MessageState.ACK
                 this._ackCallback()
+                this._lastModified = Date.now()
                 if (this._type === MessageType.REQUEST) {
                     this._startTimer()
                 }
@@ -98,6 +101,7 @@ export default class SentMessage {
             case MessageState.TIMED_OUT:
             case MessageState.ERROR:
             case MessageState.NAK:
+                this._lastModified = Date.now()
                 // TODO Should we log this?
                 break
         }
@@ -109,21 +113,24 @@ export default class SentMessage {
             case MessageState.ACK:
                 this._state = MessageState.NAK
                 this._nakCallback()
+                this._lastModified = Date.now()
                 break
 
             case MessageState.REPLY:
             case MessageState.TIMED_OUT:
             case MessageState.ERROR:
             case MessageState.NAK:
+                this._lastModified = Date.now()
                 // TODO Should we log this?
                 break
         }
     }
-    public replyWith(data: Buffer): void {
+    public gotReply(data: Buffer): void {
         this._stopTimer()
         this._state = MessageState.REPLY
         this._reply = data
         this._replyCallback(data)
+        this._lastModified = Date.now()
     }
     private _startTimer() {
         const interval = this._state === MessageState.ACK ? this._config.replyTimeoutMs : this._config.ackTimeoutMs

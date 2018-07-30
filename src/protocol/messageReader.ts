@@ -1,11 +1,11 @@
 import { ACK, EOT, ETX, NAK, SOH, STX, UUID } from '.'
 import { create as createLogger } from '../log'
 
-export interface IMessageReaderOptions {
+export interface MessageReaderOptions {
     bufferSize: number
 }
 
-export interface IMessageReaderHandlers {
+export interface MessageReaderHandlers {
     messageHandler?: (id: UUID, data: Buffer) => void
     replyHandler?: (id: UUID, data: Buffer) => void
     messageQueryHandler?: (id: UUID) => void
@@ -45,7 +45,7 @@ export default class MessageReader {
     private _nakHandler: (id: UUID) => void
     private _errorHandler: (badData: Buffer) => void
     private _log = createLogger('ipc-reader')
-    constructor(handlers: IMessageReaderHandlers, options?: IMessageReaderOptions) {
+    constructor(handlers: MessageReaderHandlers, options?: MessageReaderOptions) {
         this._messageHandler =
             handlers.messageHandler ||
             (() => {

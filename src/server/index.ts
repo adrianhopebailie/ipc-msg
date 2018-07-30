@@ -1,4 +1,4 @@
-import { Server, Socket } from 'net'
+import { ListenOptions, Server, Socket } from 'net'
 import { create as createLogger, Logger } from '../log'
 import { ProtocolConfig, UUID } from '../protocol'
 import { ErrorHandler, IpcSocket, MessageHandler } from '../socket'
@@ -10,8 +10,6 @@ export interface ServerConfig {
     connectHandler: ConnectHandler
     messageHandler: MessageHandler
     errorHandler: ErrorHandler
-    allowHalfOpen?: boolean
-    pauseOnConnect?: boolean
 }
 
 export class IpcSocketServer {
@@ -26,8 +24,8 @@ export class IpcSocketServer {
 
     constructor(config: ServerConfig, protocolConfig: ProtocolConfig) {
         this._server = new Server({
-            allowHalfOpen: config.allowHalfOpen,
-            pauseOnConnect: config.pauseOnConnect,
+            allowHalfOpen: false,
+            pauseOnConnect: false,
         })
         this._id = config.id
         this._connectHandler = config.connectHandler
@@ -44,25 +42,30 @@ export class IpcSocketServer {
         return this._id
     }
 
-    public async listen(path: string, timeoutMs?: number): Promise<void> {
+    public async listen(options: ListenOptions, timeoutMs?: number): Promise<IpcSocketServer> {
         this._log.debug(`Starting server...`)
-        return new Promise<void>((resolve, reject) => {
+        return new Promise<IpcSocketServer>((resolve, reject) => {
             const timeout = setTimeout(reject, timeoutMs || 5000)
-            this._server.listen(path, () => {
-                this._log.info(`Server listening at ${path}`)
+            this._server.listen(options, () => {
+                this._log.info(`Server listening: ${JSON.stringify(options)}`)
                 clearTimeout(timeout)
-                resolve()
+                resolve(this)
             })
         })
     }
 
-    public async close(timeoutMs?: number) {
+    public async close(timeoutMs?: number): Promise<IpcSocketServer>  {
         this._log.debug(`Stopping server...`)
-        return new Promise<void>((resolve, reject) => {
-            const timeout = setTimeout(reject, timeoutMs || 5000)
+        return new Promise<IpcSocketServer>((resolve, reject) => {
+            const timeout = setTimeout(() =>{
+                reject(new Error('Timed out trying to close server.'))
+            }, timeoutMs || 10000)
+
+            this._clients.forEach(client => client.close())
             this._server.close(() => {
                 clearTimeout(timeout)
-                resolve()
+                this._server.unref()
+                resolve(this)
             })
         })
     }
@@ -72,18 +75,12 @@ export class IpcSocketServer {
     }
 
     private _onConnection(socket: Socket) {
-        const id = new UUID()
-        const client = new IpcSocket(
-            {
-                id: id.toString(),
-                socketOrPath: socket,
-            },
-            this._protocolConfig,
-        )
-        this._clients.set(id.toString(), client)
-
+        const id = new UUID().toString()        
+        const client = new IpcSocket({ id }, this._protocolConfig, socket)
         client.messageHandler = this._Client_onMessage.bind(this)
         client.errorHandler = this._Client_onError.bind(this)
+
+        this._clients.set(id, client)
 
         this._connectHandler(client)
     }
