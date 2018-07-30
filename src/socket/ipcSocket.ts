@@ -11,7 +11,7 @@ enum ConnectionState {
     CONNECTING,
     CONNECTED,
     CLOSING,
-    DESTROYED
+    DESTROYED,
 }
 export enum MessageState {
     NEW,
@@ -76,7 +76,7 @@ export default class IpcSocket {
         this._connectTimeoutMs = config.connectTimeoutMs || 5000
         this._maxReconnects = config.maxReconnects || 5
 
-        this._state = (socket) ? ConnectionState.CONNECTED : ConnectionState.IDLE
+        this._state = socket ? ConnectionState.CONNECTED : ConnectionState.IDLE
 
         this._socket = socket || new Socket()
         this._bindSocketEvents()
@@ -96,7 +96,6 @@ export default class IpcSocket {
 
         this._messageHandler = config.messageHandler
         this._errorHandler = config.errorHandler
-
     }
 
     public get id(): string {
@@ -116,7 +115,7 @@ export default class IpcSocket {
     }
 
     public async connect(options: SocketConnectOpts): Promise<IpcSocket> {
-        if(this._state === ConnectionState.CONNECTED || this._state === ConnectionState.CONNECTING) {
+        if (this._state === ConnectionState.CONNECTED || this._state === ConnectionState.CONNECTING) {
             return Promise.reject(new Error('Socket already connected/connecting.'))
         }
         this._state = ConnectionState.CONNECTING
@@ -127,16 +126,19 @@ export default class IpcSocket {
                 this._state = ConnectionState.IDLE
                 reject(new Error('Timed out trying to connect.'))
             }, this._connectTimeoutMs)
-            this._socket.connect(options, () => {
-                clearTimeout(timeout)
-                setTimeout(this._gcMessages.bind(this), this._gcIntervalMs)
-                resolve(this)
-            })
+            this._socket.connect(
+                options,
+                () => {
+                    clearTimeout(timeout)
+                    setTimeout(this._gcMessages.bind(this), this._gcIntervalMs)
+                    resolve(this)
+                },
+            )
         })
     }
 
     public async sendMessage(data: Buffer): Promise<void> {
-        if(this._state !== ConnectionState.CONNECTED) {
+        if (this._state !== ConnectionState.CONNECTED) {
             throw new Error('State error. Socket is not connected or is closing.')
         }
         return new Promise<void>((ack, nak) => {
@@ -163,7 +165,7 @@ export default class IpcSocket {
     }
 
     public sendRequest(data: Buffer, ack: () => void): Promise<Buffer> {
-        if(this._state !== ConnectionState.CONNECTED) {
+        if (this._state !== ConnectionState.CONNECTED) {
             throw new Error('State error. Socket is not connected or is closing.')
         }
         return new Promise<Buffer>((respond, nak) => {
@@ -193,19 +195,19 @@ export default class IpcSocket {
         this._gcExpiryMs = 0
         this._gcIntervalMs = 500
         this._gcMessages()
-        return new Promise<void>((closed) => {
-            const cachedMessages = [ 
-                this._sentMessages, 
-                this._sentReplies, 
-                this._sentRequests, 
-                this._receivedMessages].map(messages => messages.size).reduce((p,c)=>p+c)
-            if(cachedMessages === 0) {
+        return new Promise<void>(closed => {
+            const cachedMessages = [this._sentMessages, this._sentReplies, this._sentRequests, this._receivedMessages]
+                .map(messages => messages.size)
+                .reduce((p, c) => p + c)
+            if (cachedMessages === 0) {
                 this.destroy()
                 closed()
             } else {
-                closed(new Promise((timeout) => {
-                    setTimeout(() => timeout(this.close()), 500)
-                }))
+                closed(
+                    new Promise(timeout => {
+                        setTimeout(() => timeout(this.close()), 500)
+                    }),
+                )
             }
         })
     }
@@ -223,7 +225,7 @@ export default class IpcSocket {
         this._socket.on('end', this._Socket_onEnd.bind(this))
         this._socket.on('error', this._Socket_onError.bind(this))
         this._socket.on('lookup', this._Socket_onLookup.bind(this))
-        this._socket.on('timeout', this._Socket_onTimeout.bind(this))        
+        this._socket.on('timeout', this._Socket_onTimeout.bind(this))
     }
     private _createAndSendReply(id: UUID, data: Buffer, ack: AckCallback, nak: NakCallback, message: ReceivedMessage) {
         const replyMessage = new SentMessage(
@@ -306,16 +308,15 @@ export default class IpcSocket {
     }
 
     private _gcMessages() {
-        [ this._sentMessages, 
-          this._sentReplies, 
-          this._sentRequests, 
-          this._receivedMessages].forEach( (messages: Map<string, CachedMessage>) => {
-            messages.forEach( (message, messageId) => {
-                if((Date.now() - message.lastModified) > this._gcExpiryMs) {
-                    messages.delete(messageId)
-                }
-            })            
-        })
+        ;[this._sentMessages, this._sentReplies, this._sentRequests, this._receivedMessages].forEach(
+            (messages: Map<string, CachedMessage>) => {
+                messages.forEach((message, messageId) => {
+                    if (Date.now() - message.lastModified > this._gcExpiryMs) {
+                        messages.delete(messageId)
+                    }
+                })
+            },
+        )
         setTimeout(this._gcMessages.bind(this), this._gcIntervalMs)
     }
 
@@ -473,5 +474,4 @@ export default class IpcSocket {
     private _Socket_onTimeout() {
         this._log.debug(`Socket ${this._id} idle timeout`)
     }
-
 }

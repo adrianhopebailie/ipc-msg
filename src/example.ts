@@ -85,8 +85,7 @@ const mockHandler: IpcMessageHandler = (
         new DefaultIpcConfig(),
     )
 
-    
-    await client.connect({ path: './ipc.sock'})
+    await client.connect({ path: './ipc.sock' })
 
     const messages: { [key: string]: string[] } = {
         message_ack: ['MESSAGE', 'ACK'],
@@ -101,7 +100,7 @@ const mockHandler: IpcMessageHandler = (
         client.close().then(() => {
             server.close().then(() => {
                 process.exit(0)
-            })    
+            })
         })
     })
 

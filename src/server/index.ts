@@ -54,10 +54,10 @@ export class IpcSocketServer {
         })
     }
 
-    public async close(timeoutMs?: number): Promise<IpcSocketServer>  {
+    public async close(timeoutMs?: number): Promise<IpcSocketServer> {
         this._log.debug(`Stopping server...`)
         return new Promise<IpcSocketServer>((resolve, reject) => {
-            const timeout = setTimeout(() =>{
+            const timeout = setTimeout(() => {
                 reject(new Error('Timed out trying to close server.'))
             }, timeoutMs || 10000)
 
@@ -75,7 +75,7 @@ export class IpcSocketServer {
     }
 
     private _onConnection(socket: Socket) {
-        const id = new UUID().toString()        
+        const id = new UUID().toString()
         const client = new IpcSocket({ id }, this._protocolConfig, socket)
         client.messageHandler = this._Client_onMessage.bind(this)
         client.errorHandler = this._Client_onError.bind(this)

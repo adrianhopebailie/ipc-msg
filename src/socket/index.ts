@@ -4,6 +4,6 @@ export { default as IpcSocket } from './ipcSocket'
 export { ErrorHandler, SocketConfig, MessageHandler } from './ipcSocket'
 
 export interface CachedMessage {
-    id : UUID
+    id: UUID
     lastModified: number
 }
