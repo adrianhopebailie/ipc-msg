@@ -173,7 +173,7 @@ export default class IpcSocket {
         })
     }
 
-    public sendRequest(data: Buffer, ack: () => void): Promise<Buffer> {
+    public sendRequest(data: Buffer, ack?: () => void): Promise<Buffer> {
         if (this._state !== ConnectionState.CONNECTED) {
             throw new Error('State error. Socket is not connected or is closing.')
         }
@@ -185,7 +185,10 @@ export default class IpcSocket {
                 MessageType.REQUEST,
                 this._config,
                 respond,
-                ack,
+                ack ||
+                    (() => {
+                        /* NOOP */
+                    }),
                 nak,
                 this._retry.bind(this, id, data),
             )
