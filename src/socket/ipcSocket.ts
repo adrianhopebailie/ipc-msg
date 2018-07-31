@@ -2,11 +2,10 @@ import { Socket, SocketConnectOpts } from 'net'
 import { CachedMessage } from '.'
 import { create as createLogger, Logger } from '../log'
 import { MessageReader, MessageWriter, ProtocolConfig, UUID } from '../protocol'
-import { IpcSocketServer } from '../server'
 import ReceivedMessage from './receivedMessage'
 import SentMessage from './sentMessage'
 
-enum ConnectionState {
+export enum ConnectionState {
     IDLE,
     CONNECTING,
     CONNECTED,
@@ -28,18 +27,22 @@ export enum MessageType {
     REQUEST,
     REPLY,
 }
+
 export type MessageHandler = (
     socket: IpcSocket,
     data: Buffer,
     respond: (reply?: Promise<Buffer> | Buffer) => Promise<void>,
 ) => void
-export type ErrorHandler = (socket: IpcSocket | IpcSocketServer, error: Error) => void
+export type ErrorHandler = (socket: IpcSocket, error: Error) => void
+export type CloseHandler = (socket: IpcSocket) => void
 export type AckCallback = (value?: void | PromiseLike<void> | undefined) => void
 export type NakCallback = (error?: Error) => void
+
 export interface SocketConfig {
     id: string
     messageHandler?: MessageHandler
     errorHandler?: ErrorHandler
+    closeHandler?: CloseHandler
     connectTimeoutMs?: number
     maxReconnects?: number
 }
@@ -61,6 +64,7 @@ export default class IpcSocket {
     private _writer: MessageWriter
     private _messageHandler?: MessageHandler
     private _errorHandler?: ErrorHandler
+    private _closeHandler?: CloseHandler
     private _log: Logger
     private _gcIntervalMs: number = 1000
     private _gcExpiryMs: number = 5 * 60 * 1000
@@ -74,7 +78,7 @@ export default class IpcSocket {
 
         this._config = protocolConfig
         this._connectTimeoutMs = config.connectTimeoutMs || 5000
-        this._maxReconnects = config.maxReconnects || 5
+        this._maxReconnects = config.maxReconnects || 0
 
         this._state = socket ? ConnectionState.CONNECTED : ConnectionState.IDLE
 
@@ -96,6 +100,7 @@ export default class IpcSocket {
 
         this._messageHandler = config.messageHandler
         this._errorHandler = config.errorHandler
+        this._closeHandler = config.closeHandler
     }
 
     public get id(): string {
@@ -112,6 +117,10 @@ export default class IpcSocket {
 
     public set errorHandler(handler: ErrorHandler) {
         this._errorHandler = handler
+    }
+
+    public set closeHandler(handler: CloseHandler) {
+        this._closeHandler = handler
     }
 
     public async connect(options: SocketConnectOpts): Promise<IpcSocket> {
@@ -308,7 +317,7 @@ export default class IpcSocket {
     }
 
     private _gcMessages() {
-        ;[this._sentMessages, this._sentReplies, this._sentRequests, this._receivedMessages].forEach(
+        [this._sentMessages, this._sentReplies, this._sentRequests, this._receivedMessages].forEach(
             (messages: Map<string, CachedMessage>) => {
                 messages.forEach((message, messageId) => {
                     if (Date.now() - message.lastModified > this._gcExpiryMs) {
@@ -322,17 +331,53 @@ export default class IpcSocket {
 
     private _Socket_onClose(hadError: boolean): void {
         this._state = ConnectionState.DESTROYED
-        this._log.info(`Socket ${this._id} closed with${hadError ? '' : ' no'} errors`)
+        this._log.info(`Socket ${this._id} closed with ${hadError ? '' : 'no '}errors`)
+        if (this._closeHandler) {
+            this._closeHandler(this)
+        }
     }
     private _Socket_onConnect(): void {
         this._state = ConnectionState.CONNECTED
-        this._log.debug(`Socket ${this._id} Connected`)
+        this._reconnectAttempts = 0
+        this._log.info(`Socket ${this._id} Connected`)
     }
+
     private _Socket_onData(data: Buffer): void {
-        this._log.debug(`Socket ${this._id} received ${data.byteLength} bytes of data`)
+        this._log.trace(`Socket ${this._id} received ${data.byteLength} bytes of data`)
         this._log.trace('data received', data)
         this._reader.read(data)
     }
+
+    private _Socket_onDrain() {
+        this._log.debug(`Socket ${this._id} output buffer drained`)
+    }
+    private _Socket_onEnd() {
+        // No-op - We don't allow half-open sockets
+    }
+    private _Socket_onError(error: Error) {
+        this._log.error(`Socket ${this._id} error`, error)
+        this._state = ConnectionState.DESTROYED
+        this._socket.destroy(error)
+        this._socket.unref()
+        if (this._errorHandler) {
+            this._errorHandler(this, error)
+        }
+        if (this._connectOptions && this._reconnectAttempts < this._maxReconnects) {
+            // Client socket - attempt to reconnect
+            this._socket = new Socket()
+            this._bindSocketEvents()
+            this._reconnectAttempts++
+            this.connect(this._connectOptions)
+        }
+    }
+    private _Socket_onLookup() {
+        // No-op - Only applies to network sockets
+    }
+
+    private _Socket_onTimeout() {
+        this._log.debug(`Socket ${this._id} idle timeout`)
+    }
+
     private _Reader_onMessage(id: UUID, data: Buffer): void {
         this._log.debug(`Got message ${id} containing ${data.byteLength} bytes of data`)
         this._log.trace('message', id, data)
@@ -378,6 +423,7 @@ export default class IpcSocket {
             }
         }
     }
+
     private _Reader_onMessageQuery(id: UUID): void {
         this._log.debug(`Got message query ${id}`)
         this._log.trace('message query', id)
@@ -388,6 +434,7 @@ export default class IpcSocket {
             this._sendNak(id)
         }
     }
+
     private _Reader_onReply(id: UUID, data: Buffer): void {
         const request = this._sentRequests.get(id + '')
         if (request) {
@@ -403,6 +450,7 @@ export default class IpcSocket {
             this._sendNak(id)
         }
     }
+
     private _Reader_onReplyQuery(id: UUID): void {
         this._log.debug(`Got reply query ${id}`)
         this._log.trace('reply query', id)
@@ -448,30 +496,5 @@ export default class IpcSocket {
                 this._callErrorHandler(new Error(`Unsolicited ACK ${id} received.`))
             }
         }
-    }
-    private _Socket_onDrain() {
-        this._log.debug(`Socket ${this._id} output buffer drained`)
-    }
-    private _Socket_onEnd() {
-        // No-op - We don't allow half-open sockets
-    }
-    private _Socket_onError(error: Error) {
-        this._log.error(`Socket ${this._id} error`, error)
-        this._state = ConnectionState.DESTROYED
-        this._socket.destroy(error)
-        this._socket.unref()
-        if (this._connectOptions && this._reconnectAttempts < this._maxReconnects) {
-            // Client socket - attempt to reconnect
-            this._socket = new Socket()
-            this._bindSocketEvents()
-            this._reconnectAttempts++
-            this.connect(this._connectOptions)
-        }
-    }
-    private _Socket_onLookup() {
-        // No-op - Only applies to network sockets
-    }
-    private _Socket_onTimeout() {
-        this._log.debug(`Socket ${this._id} idle timeout`)
     }
 }

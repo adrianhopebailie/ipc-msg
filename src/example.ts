@@ -59,12 +59,14 @@ const mockHandler: IpcMessageHandler = (
 ;(async () => {
     const server = new IpcSocketServer(
         {
+            id: 'TEST-SERVER',
+            connectHandler: (socket: IpcSocket) => {
+                socket.messageHandler = mockHandler
+            },
             errorHandler: (source, error) => {
                 console.error('Server error', source, error)
             },
-            id: 'TEST-SERVER',
-            messageHandler: mockHandler,
-            connectHandler: () => {
+            closeHandler: () => {
                 /* NOOP */
             },
         },

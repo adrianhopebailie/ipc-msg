@@ -11,7 +11,7 @@
     "format": "prettier --write \"src/**/*.ts\" \"src/**/*.js\" && prettier --write \"test/**/*.ts\" \"test/**/*.js\"",
     "lint": "tslint -c tslint.json src/**/*.ts",
     "preversion": "npm run lint",
-    "version": "npm run format && git add -A src",
+    "version": "npm run lint && git add -A src",
     "postversion": "git push && git push --tags",
     "prepare": "npm run build",
     "prepublishOnly": "npm run lint && npm run test"
